@@ -1,0 +1,48 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+## Visual Studio
+.vs/
+*.rsuser
+*.sln.docstates
+[Tt]est[Rr]esult*/
+[Dd]ebugPublic/
+[Rr]eleases/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+[Ll]og/
+
+## Rider
+.idea/
+*.sln.iml
+
+## User-specific files
+*.suo
+*.user
+*.config
+!*.config.template
+appsettings.Development.json
+
+## OS
+.DS_Store
+Thumbs.db
