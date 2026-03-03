@@ -19,7 +19,19 @@ public record IdentityListItem(
     SummitSummary? ActiveSummit
 );
 
-public record SummitSummary(Guid Id, string Description, string Status);
+public record SummitSummary(Guid Id, string Description, string Status,
+    ActiveMilestoneSummary? ActiveMilestone);
+
+public record ActiveMilestoneSummary(
+    Guid Id,
+    string Description,
+    DateOnly TargetDate,
+    int SortOrder,
+    string Status,
+    ActiveSprintSummary? ActiveSprint
+);
+
+public record ActiveSprintSummary(Guid Id, int SprintNumber);
 
 // GET /api/identities/{id} — detail
 public record IdentityDetail(

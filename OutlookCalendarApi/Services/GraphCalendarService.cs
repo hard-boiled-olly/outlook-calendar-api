@@ -105,6 +105,28 @@ public class GraphCalendarService
         return count;
     }
 
+    public async Task<int> DeleteEventsAsync(string graphToken, List<string> calendarEventIds)
+    {
+        var client = CreateClient(graphToken);
+        int deleted = 0;
+
+        foreach (var eventId in calendarEventIds)
+        {
+            try
+            {
+                await client.Me.Events[eventId].DeleteAsync();
+                deleted++;
+                await Task.Delay(250); // Respect Graph rate limit
+            }
+            catch
+            {
+                // Event may already be deleted — continue with remaining
+            }
+        }
+
+        return deleted;
+    }
+
     private class TokenProvider(string token) : IAccessTokenProvider
     {
         public Task<string> GetAuthorizationTokenAsync(

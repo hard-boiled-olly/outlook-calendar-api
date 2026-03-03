@@ -214,6 +214,80 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
         return Ok(new SprintConfirmResult(sprint.Id, totalEvents));
     }
 
+    [HttpPost("api/sprints/{sprintId:guid}/replan")]
+    public async Task<IActionResult> Replan(Guid sprintId, [FromBody] ReplanRequest request)
+    {
+        if (HttpContext.Items["UserId"] is not Guid userId)
+            return Unauthorized();
+
+        var sprint = await db.Sprints
+            .Include(s => s.Milestone)
+            .ThenInclude(m => m.Summit)
+            .ThenInclude(s => s.Identity)
+            .FirstOrDefaultAsync(s => s.Id == sprintId && s.Milestone.Summit.Identity.UserId == userId);
+
+        if (sprint == null)
+            return NotFound();
+
+        // Save reflection on this sprint
+        sprint.Reflection = request.Reflection;
+        await db.SaveChangesAsync();
+
+        var identity = sprint.Milestone.Summit.Identity;
+        var summit = sprint.Milestone.Summit;
+        var provedMilestone = sprint.Milestone;
+
+        // Find the next active milestone
+        var nextMilestone = await db.Milestones
+            .Where(m => m.SummitId == summit.Id && m.Status == "active")
+            .OrderBy(m => m.SortOrder)
+            .FirstOrDefaultAsync();
+
+        if (nextMilestone == null)
+            return BadRequest("No active milestone to replan towards");
+
+        // Get current habits for this identity
+        var currentHabits = await db.HabitPrescriptions
+            .Where(hp => hp.SprintId == sprintId)
+            .Include(hp => hp.Habit)
+            .Include(hp => hp.HabitEvents.Where(he => he.SprintId == sprintId))
+            .ToListAsync();
+
+        var habitsDescription = string.Join("; ", currentHabits.Select(
+            hp => $"{hp.Habit.Name} ({hp.Habit.Frequency}): {hp.Prescription} [id:{hp.HabitId}]"));
+
+        // Call Claude for replan
+        var result = await claude.ReplanAsync(
+            identity.Statement,
+            summit.Description,
+            provedMilestone.Description,
+            nextMilestone.Description,
+            nextMilestone.ProofCriteria,
+            habitsDescription,
+            request.Reflection);
+
+        // Merge: apply Claude's updated prescriptions to existing habits
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var updatedLookup = result.UpdatedPrescriptions
+            .ToDictionary(u => u.HabitId, u => u.NewPrescription);
+
+        var mergedHabits = currentHabits.Select(hp =>
+        {
+            var newPrescription = updatedLookup.TryGetValue(hp.HabitId.ToString(), out var p)
+                ? p : hp.Prescription;
+            return new GeneratedHabitItem(
+                hp.Habit.Name, hp.Habit.Frequency, newPrescription,
+                hp.HabitEvents.FirstOrDefault()?.DurationMins ?? 30);
+        }).ToList();
+
+        var newTasks = result.NewTasks.Select(t => new GeneratedTaskItem(
+            t.Name, t.Description, t.SuggestedDaysFromStart,
+            today.AddDays(t.SuggestedDaysFromStart), t.DurationMins
+        )).ToList();
+
+        return Ok(new ReplanResult(result.CoachingNote, mergedHabits, newTasks));
+    }
+
     [HttpGet("api/sprints/{sprintId:guid}/habits")]
     public async Task<IActionResult> GetHabits(Guid sprintId)
     {
