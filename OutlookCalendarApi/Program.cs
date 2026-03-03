@@ -1,6 +1,7 @@
 using Microsoft.Identity.Web;
 using OutlookCalendarApi.Data;
 using OutlookCalendarApi.Middleware;
+using OutlookCalendarApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,8 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<AppDbContext>("proveitdb");
 
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, "AzureAd");
+
+builder.Services.AddSingleton<ClaudeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
