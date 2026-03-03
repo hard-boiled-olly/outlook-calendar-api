@@ -12,6 +12,7 @@ builder.AddNpgsqlDbContext<AppDbContext>("proveitdb");
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, "AzureAd");
 
 builder.Services.AddSingleton<ClaudeService>();
+builder.Services.AddSingleton<GraphCalendarService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
