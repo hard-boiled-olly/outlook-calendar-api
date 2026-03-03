@@ -13,7 +13,11 @@ builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration,
 
 builder.Services.AddSingleton<ClaudeService>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
