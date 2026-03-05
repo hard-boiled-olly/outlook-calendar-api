@@ -29,7 +29,7 @@ public class ClaudeService
     {
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeHaiku4_5,
+            Model = "claude-haiku-4-5-20251001",
             MaxTokens = 1024,
             System = IdentitySystemPrompt,
             Messages = [new()
@@ -53,7 +53,7 @@ public class ClaudeService
     {
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeHaiku4_5,
+            Model = "claude-haiku-4-5-20251001",
             MaxTokens = 1024,
             System = SummitSystemPrompt,
             Messages = [new()
@@ -78,7 +78,7 @@ public class ClaudeService
     {
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeHaiku4_5,
+            Model = "claude-haiku-4-5-20251001",
             MaxTokens = 2048,
             System = MilestoneSystemPrompt,
             Messages = [new()
@@ -119,7 +119,7 @@ public class ClaudeService
 
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeHaiku4_5,
+            Model = "claude-haiku-4-5-20251001",
             MaxTokens = 2048,
             System = SprintPlanSystemPrompt,
             Messages = [new()
@@ -146,7 +146,7 @@ public class ClaudeService
     {
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeHaiku4_5,
+            Model = "claude-haiku-4-5-20251001",
             MaxTokens = 2048,
             System = ReplanSystemPrompt,
             Messages = [new()

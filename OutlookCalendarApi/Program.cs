@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using OutlookCalendarApi.Data;
 using OutlookCalendarApi.Middleware;
@@ -22,6 +23,12 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {

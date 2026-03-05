@@ -43,6 +43,10 @@ TestResult.xml
 !*.config.template
 appsettings.Development.json
 
+## Backslash paths (Windows build artifacts on WSL)
+**/bin\\*
+**/obj\\*
+
 ## OS
 .DS_Store
 Thumbs.db
