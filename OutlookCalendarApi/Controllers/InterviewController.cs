@@ -1,18 +1,27 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OutlookCalendarApi.Data;
+using OutlookCalendarApi.Models.Claude;
 using OutlookCalendarApi.Models.Domain;
 using OutlookCalendarApi.Models.Dto;
+using OutlookCalendarApi.Services;
 
 namespace OutlookCalendarApi.Controllers;
 
 [ApiController]
 [Route("api/interviews")]
 [Authorize]
-public class InterviewController(AppDbContext db) : ControllerBase
+public class InterviewController(AppDbContext db, InterviewService interviews) : ControllerBase
 {
-    // POST /api/interviews — create draft identity + interview session
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
+
+    // POST /api/interviews — create draft identity + interview session, get first question
     [HttpPost]
     public async Task<IActionResult> Start([FromBody] StartInterviewRequest request)
     {
@@ -27,12 +36,15 @@ public class InterviewController(AppDbContext db) : ControllerBase
         };
         db.Identities.Add(identity);
 
+        var (firstQuestion, historyJson) = await interviews.StartAsync();
+
         var session = new InterviewSession
         {
             Type = request.Type,
             IdentityId = identity.Id,
             UserId = userId,
-            CurrentStep = 0,
+            CurrentStep = 1,
+            ConversationHistory = historyJson,
             Active = true,
             UpdatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(30)
@@ -45,7 +57,7 @@ public class InterviewController(AppDbContext db) : ControllerBase
             session.Id,
             identity.Id,
             session.CurrentStep,
-            "What area of your life do you want to work on?"
+            firstQuestion
         ));
     }
 
@@ -77,7 +89,7 @@ public class InterviewController(AppDbContext db) : ControllerBase
         ));
     }
 
-    // POST /api/interviews/{id}/respond — stub; Plan 02 adds Claude logic
+    // POST /api/interviews/{id}/respond
     [HttpPost("{id:guid}/respond")]
     public async Task<IActionResult> Respond(Guid id, [FromBody] InterviewRespondRequest request)
     {
@@ -93,16 +105,92 @@ public class InterviewController(AppDbContext db) : ControllerBase
         if (session.ExpiresAt < DateTime.UtcNow)
             return Gone();
 
+        var result = await interviews.ProcessResponseAsync(session.ConversationHistory, request.Answer);
+
+        session.ConversationHistory = result.UpdatedHistoryJson;
         session.CurrentStep++;
         session.UpdatedAt = DateTime.UtcNow;
+
+        InterviewSummaryDto? summary = null;
+
+        if (result.IsComplete && result.Output is not null)
+        {
+            session.AccumulatedData = JsonSerializer.Serialize(result.Output, JsonOptions);
+
+            summary = new InterviewSummaryDto(
+                result.Output.IdentityStatement,
+                result.Output.SummitDescription,
+                result.Output.ProofCriteria,
+                result.Output.TargetDate,
+                result.Output.SummaryBreakdown
+                    .Select(b => new SummaryBreakdownDto(b.Component, b.BasedOn))
+                    .ToArray()
+            );
+        }
+
         await db.SaveChangesAsync();
 
-        return Ok(new InterviewStepResponse(
+        return Ok(new InterviewRespondResponse(
             session.Id,
-            session.IdentityId ?? Guid.Empty,
-            session.CurrentStep,
-            "[Interview logic coming in Plan 02]"
+            result.IsComplete,
+            result.NextQuestion,
+            summary
         ));
+    }
+
+    // POST /api/interviews/{id}/confirm — activate identity, create summit, close session
+    [HttpPost("{id:guid}/confirm")]
+    public async Task<IActionResult> Confirm(Guid id)
+    {
+        if (HttpContext.Items["UserId"] is not Guid userId)
+            return Unauthorized();
+
+        var session = await db.InterviewSessions
+            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId && s.DeletedAt == null);
+
+        if (session == null)
+            return NotFound();
+
+        if (session.AccumulatedData == "{}" || string.IsNullOrEmpty(session.AccumulatedData))
+            return BadRequest("Interview is not complete yet.");
+
+        if (!session.IdentityId.HasValue)
+            return BadRequest("Session has no associated identity.");
+
+        var output = JsonSerializer.Deserialize<InterviewOutput>(session.AccumulatedData, JsonOptions)!;
+
+        var identity = await db.Identities
+            .FirstOrDefaultAsync(i => i.Id == session.IdentityId.Value && i.UserId == userId);
+
+        if (identity == null)
+            return NotFound();
+
+        identity.Statement = output.IdentityStatement;
+        identity.Active = true;
+
+        DateOnly? targetDate = null;
+        if (!string.IsNullOrEmpty(output.TargetDate) &&
+            DateOnly.TryParse(output.TargetDate, out var parsedDate))
+        {
+            targetDate = parsedDate;
+        }
+
+        var summit = new Summit
+        {
+            IdentityId = identity.Id,
+            Description = output.SummitDescription,
+            ProofCriteria = output.ProofCriteria,
+            TargetDate = targetDate,
+            Status = "active"
+        };
+        db.Summits.Add(summit);
+
+        session.Active = false;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        return Ok(new InterviewConfirmResponse(identity.Id, summit.Id));
     }
 
     // DELETE /api/interviews/{id} — abandon session and draft identity
