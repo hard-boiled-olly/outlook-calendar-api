@@ -15,6 +15,7 @@ public record InterviewStepResult(
     bool IsComplete,
     string? NextQuestion,
     InterviewOutput? Output,
+    MilestoneSprintOutput? MilestoneSprintOutput,
     string UpdatedHistoryJson
 );
 
@@ -56,8 +57,45 @@ public class InterviewService
         return (firstQuestion, JsonSerializer.Serialize(history, JsonOptions));
     }
 
-    public async Task<InterviewStepResult> ProcessResponseAsync(string historyJson, string userMessage)
+    public async Task<(string FirstQuestion, string HistoryJson)> StartMilestoneSprintAsync(
+        string identityStatement, string summitDescription, string proofCriteria, string? targetDate)
     {
+        var context = $"""
+            [START]
+            Context from confirmed identity and goal:
+            - Identity: {identityStatement}
+            - Goal: {summitDescription}
+            - Proof criteria: {proofCriteria}
+            - Target date: {targetDate ?? "not set"}
+            """;
+
+        var kickoff = new ConversationMessage("user", context);
+
+        var response = await _client.Messages.Create(new MessageCreateParams
+        {
+            Model = "claude-sonnet-4-6",
+            MaxTokens = 1024,
+            System = MilestoneSprintSystemPrompt,
+            Messages = [new() { Role = Role.User, Content = kickoff.Content }]
+        });
+
+        var firstQuestion = ExtractText(response);
+
+        var history = new List<ConversationMessage>
+        {
+            kickoff,
+            new("assistant", firstQuestion)
+        };
+
+        return (firstQuestion, JsonSerializer.Serialize(history, JsonOptions));
+    }
+
+    public async Task<InterviewStepResult> ProcessResponseAsync(string type, string historyJson, string userMessage)
+    {
+        var systemPrompt = type == "milestone-sprint"
+            ? MilestoneSprintSystemPrompt
+            : IdentitySummitSystemPrompt;
+
         var history = JsonSerializer.Deserialize<List<ConversationMessage>>(historyJson, JsonOptions)!;
         history.Add(new ConversationMessage("user", userMessage));
 
@@ -71,7 +109,7 @@ public class InterviewService
         {
             Model = "claude-sonnet-4-6",
             MaxTokens = 1024,
-            System = IdentitySummitSystemPrompt,
+            System = systemPrompt,
             Messages = messages
         });
 
@@ -81,16 +119,21 @@ public class InterviewService
 
         if (!assistantText.Contains("[[INTERVIEW_COMPLETE]]"))
         {
-            return new InterviewStepResult(false, assistantText, null, updatedHistoryJson);
+            return new InterviewStepResult(false, assistantText, null, null, updatedHistoryJson);
         }
 
         var cleanedText = assistantText.Replace("[[INTERVIEW_COMPLETE]]", "").Trim();
         history[^1] = new ConversationMessage("assistant", cleanedText);
         updatedHistoryJson = JsonSerializer.Serialize(history, JsonOptions);
 
-        var output = await ExtractStructuredOutputAsync(history);
+        if (type == "milestone-sprint")
+        {
+            var msOutput = await ExtractMilestoneSprintOutputAsync(history);
+            return new InterviewStepResult(true, null, null, msOutput, updatedHistoryJson);
+        }
 
-        return new InterviewStepResult(true, null, output, updatedHistoryJson);
+        var output = await ExtractStructuredOutputAsync(history);
+        return new InterviewStepResult(true, null, output, null, updatedHistoryJson);
     }
 
     private async Task<InterviewOutput> ExtractStructuredOutputAsync(List<ConversationMessage> history)
@@ -123,6 +166,38 @@ public class InterviewService
         });
 
         return JsonSerializer.Deserialize<InterviewOutput>(ExtractText(response), JsonOptions)!;
+    }
+
+    private async Task<MilestoneSprintOutput> ExtractMilestoneSprintOutputAsync(List<ConversationMessage> history)
+    {
+        var messages = history.Select(m => new MessageParam
+        {
+            Role = m.Role == "user" ? Role.User : Role.Assistant,
+            Content = m.Content
+        }).ToList();
+
+        messages.Add(new MessageParam
+        {
+            Role = Role.User,
+            Content = "Please extract the structured milestone and sprint plan from our conversation."
+        });
+
+        var response = await _client.Messages.Create(new MessageCreateParams
+        {
+            Model = "claude-sonnet-4-6",
+            MaxTokens = 2048,
+            System = MilestoneSprintSystemPrompt,
+            Messages = messages,
+            OutputConfig = new OutputConfig
+            {
+                Format = new JsonOutputFormat
+                {
+                    Schema = ParseSchema(MilestoneSprintExtractionSchema)
+                }
+            }
+        });
+
+        return JsonSerializer.Deserialize<MilestoneSprintOutput>(ExtractText(response), JsonOptions)!;
     }
 
     private static string ExtractText(Message response)
@@ -171,6 +246,48 @@ public class InterviewService
         based on everything discussed in the conversation.
         """;
 
+    // ── Milestone-Sprint System Prompt ──────────────────────────────────
+
+    private static readonly string MilestoneSprintSystemPrompt = """
+        You are helping someone plan the path to a goal they've already defined. You'll receive
+        their identity statement, summit goal, proof criteria, and target date as context.
+
+        Your job is to understand where they are RIGHT NOW, then collaboratively build milestones
+        and a first sprint plan.
+
+        Guidelines:
+        - Be casual and direct — same tone as a smart friend helping plan, not a project manager
+        - Ask one question at a time
+        - Build on what they've already told you — never re-ask
+        - Start with "Where are you at with this right now?" to understand their current status
+        - Ask 5-8 questions total. Focus on the critical unknowns:
+          - Current status and experience level
+          - What resources/access they already have
+          - What's worked or not worked before (if they've tried)
+          - Realistic weekly time commitment
+        - Based on their answers, propose milestones collaboratively:
+          "Based on where you are, I'd suggest starting with..." then ask for feedback
+        - Keep habits minimal: 1-2 per sprint. Each must be justified by the conversation.
+        - Keep tasks minimal: only concrete actions needed for the first milestone
+        - Tasks should be specific ("Set up a savings account at X") not aspirational ("Research options")
+        - Space milestones proportionally between now and the target date
+        - Present the complete plan before finishing:
+          - Milestones with target dates
+          - First sprint: habits (with frequency and what exactly to do) and tasks (with deadlines)
+        - Ask "Any of this feel off? Want to adjust anything?" before completing
+        - If they want changes, adjust and re-present
+
+        When the user confirms the plan, present a final summary and end with [[INTERVIEW_COMPLETE]]
+        on its own line.
+
+        If the message starts with "[START]", read the context provided and ask your first question.
+
+        When asked to extract structured data, return the JSON matching the provided schema
+        based on everything discussed in the conversation.
+
+        IMPORTANT: Today's date is {today}. Use this for calculating milestone target dates.
+        """.Replace("{today}", DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"));
+
     // ── Extraction Schema ───────────────────────────────────────────────
 
     private const string ExtractionSchema = """
@@ -207,6 +324,76 @@ public class InterviewService
                 }
             },
             "required": ["identity_statement", "summit_description", "proof_criteria", "summary_breakdown"],
+            "additionalProperties": false
+        }
+        """;
+
+    // ── Milestone-Sprint Extraction Schema ────────────────────────────────
+
+    private const string MilestoneSprintExtractionSchema = """
+        {
+            "type": "object",
+            "properties": {
+                "milestones": {
+                    "type": "array",
+                    "description": "Progressive milestones from current status to summit goal",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "description": { "type": "string", "description": "What this milestone achieves" },
+                            "proof_criteria": { "type": "string", "description": "How to prove this milestone is done" },
+                            "target_date": { "type": "string", "description": "ISO 8601 date (YYYY-MM-DD)" },
+                            "sort_order": { "type": "integer", "description": "1-based order, 1 = first milestone" }
+                        },
+                        "required": ["description", "proof_criteria", "target_date", "sort_order"],
+                        "additionalProperties": false
+                    }
+                },
+                "first_sprint_habits": {
+                    "type": "array",
+                    "description": "1-2 recurring habits for the first sprint",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "description": "Short habit name" },
+                            "frequency": { "type": "string", "description": "e.g. 'daily', '3x per week'" },
+                            "prescription": { "type": "string", "description": "Exactly what to do each session" },
+                            "duration_mins": { "type": "integer", "description": "Minutes per session" }
+                        },
+                        "required": ["name", "frequency", "prescription", "duration_mins"],
+                        "additionalProperties": false
+                    }
+                },
+                "first_sprint_tasks": {
+                    "type": "array",
+                    "description": "Concrete one-off tasks for the first sprint",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "description": "Short task name" },
+                            "description": { "type": "string", "description": "What exactly to do" },
+                            "deadline": { "type": "string", "description": "ISO 8601 date (YYYY-MM-DD)" },
+                            "duration_mins": { "type": "integer", "description": "Estimated minutes to complete" }
+                        },
+                        "required": ["name", "description", "deadline", "duration_mins"],
+                        "additionalProperties": false
+                    }
+                },
+                "plan_breakdown": {
+                    "type": "array",
+                    "description": "Links each plan element to what the user said",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "component": { "type": "string" },
+                            "based_on": { "type": "string" }
+                        },
+                        "required": ["component", "based_on"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["milestones", "first_sprint_habits", "first_sprint_tasks", "plan_breakdown"],
             "additionalProperties": false
         }
         """;

@@ -18,8 +18,9 @@ public record InterviewStepResponse(
 public record InterviewRespondResponse(
     Guid SessionId,
     bool IsComplete,
-    string? NextQuestion,        // present when IsComplete = false
-    InterviewSummaryDto? Summary // present when IsComplete = true
+    string? NextQuestion,                        // present when IsComplete = false
+    InterviewSummaryDto? Summary,                // present when type = identity-summit
+    MilestoneSprintSummaryDto? MilestoneSprintSummary // present when type = milestone-sprint
 );
 
 public record InterviewSummaryDto(
@@ -38,10 +39,29 @@ public record ConfirmInterviewRequest(string? TargetDate); // ISO 8601 or null t
 // Response from POST /api/interviews/{id}/confirm
 public record InterviewConfirmResponse(Guid IdentityId, Guid SummitId);
 
+// POST /api/interviews/milestone-sprint
+public record StartMilestoneSprintRequest(Guid IdentityId, Guid SummitId);
+
+// Summary shown when milestone-sprint interview completes
+public record MilestoneSprintSummaryDto(
+    MilestoneSummaryItem[] Milestones,
+    HabitSummaryItem[] FirstSprintHabits,
+    TaskSummaryItem[] FirstSprintTasks,
+    SummaryBreakdownDto[] Breakdown
+);
+
+public record MilestoneSummaryItem(string Description, string ProofCriteria, string TargetDate, int SortOrder);
+public record HabitSummaryItem(string Name, string Frequency, string Prescription, int DurationMins);
+public record TaskSummaryItem(string Name, string Description, string Deadline, int DurationMins);
+
+// Response from confirming milestone-sprint interview
+public record MilestoneSprintConfirmResponse(Guid[] MilestoneIds, Guid SprintId);
+
 // GET /api/interviews/{id}
 public record InterviewStateResponse(
     Guid SessionId,
     Guid? IdentityId,
+    Guid? SummitId,
     string Type,
     int CurrentStep,
     string ConversationHistory, // raw JSON string

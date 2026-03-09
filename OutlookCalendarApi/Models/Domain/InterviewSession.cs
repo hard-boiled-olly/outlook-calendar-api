@@ -5,6 +5,7 @@ public class InterviewSession
     public Guid Id { get; set; }
     public required string Type { get; set; } // "identity-summit" | "milestone-sprint"
     public Guid? IdentityId { get; set; }
+    public Guid? SummitId { get; set; }
     public Guid UserId { get; set; }
     public int CurrentStep { get; set; }
     public string ConversationHistory { get; set; } = "[]";
@@ -16,5 +17,6 @@ public class InterviewSession
     public DateTime? DeletedAt { get; set; }
 
     public Identity? Identity { get; set; }
+    public Summit? Summit { get; set; }
     public User User { get; set; } = null!;
 }
