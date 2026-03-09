@@ -4,30 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using OutlookCalendarApi.Data;
 using OutlookCalendarApi.Models.Domain;
 using OutlookCalendarApi.Models.Dto;
-using OutlookCalendarApi.Services;
 
 namespace OutlookCalendarApi.Controllers;
 
 [ApiController]
 [Authorize]
-public class SummitController(AppDbContext db, ClaudeService claude) : ControllerBase
+public class SummitController(AppDbContext db) : ControllerBase
 {
-    [HttpPost("api/identities/{identityId:guid}/summit/refine")]
-    public async Task<IActionResult> Refine(Guid identityId, [FromBody] CreateSummitRequest request)
-    {
-        if (HttpContext.Items["UserId"] is not Guid userId)
-            return Unauthorized();
-
-        var identity = await db.Identities
-            .FirstOrDefaultAsync(i => i.Id == identityId && i.UserId == userId);
-
-        if (identity == null)
-            return NotFound();
-
-        var result = await claude.RefineSummitAsync(identity.Statement, request.RoughGoal);
-        return Ok(new SummitRefinementResult(result.RefinedGoal, result.ProofCriteria, result.Explanation));
-    }
-
     [HttpPost("api/identities/{identityId:guid}/summit")]
     public async Task<IActionResult> Create(Guid identityId, [FromBody] ConfirmSummitRequest request)
     {

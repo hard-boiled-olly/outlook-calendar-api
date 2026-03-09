@@ -3,11 +3,11 @@ using System.Text.Json.Serialization;
 namespace OutlookCalendarApi.Models.Claude;
 
 public record SprintPlanResponse(
-    [property: JsonPropertyName("habits")] List<HabitItem> Habits,
+    [property: JsonPropertyName("habits")] List<SprintPlanHabit> Habits,
     [property: JsonPropertyName("tasks")] List<TaskItem> Tasks
 );
 
-public record HabitItem(
+public record SprintPlanHabit(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("frequency")] string Frequency,
     [property: JsonPropertyName("prescription")] string Prescription,

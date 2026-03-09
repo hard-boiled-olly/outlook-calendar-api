@@ -1,13 +1,7 @@
 namespace OutlookCalendarApi.Models.Dto;
 
-// POST /api/identities/refine
-public record CreateIdentityRequest(string RoughStatement);
-
 // POST /api/identities
 public record ConfirmIdentityRequest(string Statement);
-
-// Response from /api/identities/refine
-public record IdentityRefinementResult(string RefinedStatement, string Explanation);
 
 // GET /api/identities — list item
 public record IdentityListItem(

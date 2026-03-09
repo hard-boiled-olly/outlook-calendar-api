@@ -15,7 +15,6 @@ public record MissMilestoneRequest(string Reflection);
 public record ReplanRequest(string Reflection);
 
 // POST /api/sprints/{id}/replan — response
-// Returns merged habit list (existing + Claude updates) in same shape as SprintPlanGenerationResult
 public record ReplanResult(
     string CoachingNote,
     List<GeneratedHabitItem> Habits,

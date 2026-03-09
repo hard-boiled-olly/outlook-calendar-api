@@ -4,46 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using OutlookCalendarApi.Data;
 using OutlookCalendarApi.Models.Domain;
 using OutlookCalendarApi.Models.Dto;
-using OutlookCalendarApi.Services;
 
 namespace OutlookCalendarApi.Controllers;
 
 [ApiController]
 [Authorize]
-public class MilestoneController(AppDbContext db, ClaudeService claude) : ControllerBase
+public class MilestoneController(AppDbContext db) : ControllerBase
 {
-    [HttpPost("api/summits/{summitId:guid}/milestones")]
-    public async Task<IActionResult> Generate(Guid summitId)
-    {
-        if (HttpContext.Items["UserId"] is not Guid userId)
-            return Unauthorized();
-
-        var summit = await db.Summits
-            .Include(s => s.Identity)
-            .FirstOrDefaultAsync(s => s.Id == summitId && s.Identity.UserId == userId);
-
-        if (summit == null)
-            return NotFound();
-
-        var result = await claude.GenerateMilestonesAsync(
-            summit.Identity.Statement, summit.Description, summit.ProofCriteria);
-
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var cumulativeWeeks = 0;
-        var items = result.Milestones.Select(m =>
-        {
-            cumulativeWeeks += m.SuggestedWeeks;
-            return new GeneratedMilestoneItem(
-                m.Description,
-                m.ProofCriteria,
-                m.SuggestedWeeks,
-                today.AddDays(cumulativeWeeks * 7)
-            );
-        }).ToList();
-
-        return Ok(new MilestoneGenerationResult(items));
-    }
-
     [HttpPost("api/summits/{summitId:guid}/milestones/confirm")]
     public async Task<IActionResult> Confirm(Guid summitId, [FromBody] ConfirmMilestonesRequest request)
     {

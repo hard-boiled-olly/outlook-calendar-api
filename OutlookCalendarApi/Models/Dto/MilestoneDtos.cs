@@ -1,14 +1,5 @@
 namespace OutlookCalendarApi.Models.Dto;
 
-public record MilestoneGenerationResult(List<GeneratedMilestoneItem> Milestones);
-
-public record GeneratedMilestoneItem(
-    string Description,
-    string ProofCriteria,
-    int SuggestedWeeks,
-    DateOnly TargetDate
-);
-
 public record ConfirmMilestonesRequest(List<MilestoneConfirmItem> Milestones);
 
 public record MilestoneConfirmItem(

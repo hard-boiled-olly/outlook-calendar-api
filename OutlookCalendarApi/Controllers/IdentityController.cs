@@ -11,18 +11,8 @@ namespace OutlookCalendarApi.Controllers;
 [ApiController]
 [Route("api/identities")]
 [Authorize]
-public class IdentityController(AppDbContext db, ClaudeService claude, GraphCalendarService graph) : ControllerBase
+public class IdentityController(AppDbContext db, GraphCalendarService graph) : ControllerBase
 {
-    [HttpPost("refine")]
-    public async Task<IActionResult> Refine([FromBody] CreateIdentityRequest request)
-    {
-        if (HttpContext.Items["UserId"] is not Guid)
-            return Unauthorized();
-
-        var result = await claude.RefineIdentityAsync(request.RoughStatement);
-        return Ok(new IdentityRefinementResult(result.RefinedStatement, result.Explanation));
-    }
-
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ConfirmIdentityRequest request)
     {
