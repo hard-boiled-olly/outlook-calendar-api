@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<HabitPrescription> HabitPrescriptions => Set<HabitPrescription>();
     public DbSet<HabitEvent> HabitEvents => Set<HabitEvent>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
+    public DbSet<InterviewSession> InterviewSessions => Set<InterviewSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,11 +32,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.ToTable("identities");
             e.Property(i => i.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
             e.Property(i => i.UserId).HasColumnName("user_id");
-            e.Property(i => i.AreaOfLife).HasColumnName("area_of_life");
             e.Property(i => i.Statement).HasColumnName("statement");
-            e.Property(i => i.Status).HasColumnName("status");
+            e.Property(i => i.Active).HasColumnName("active");
             e.Property(i => i.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
-            e.Property(i => i.AbandonedAt).HasColumnName("abandoned_at");
+            e.Property(i => i.DeletedAt).HasColumnName("deleted_at");
 
             e.HasOne(i => i.User).WithMany(u => u.Identities).HasForeignKey(i => i.UserId);
         });
@@ -138,6 +138,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(st => st.Status).HasColumnName("status");
 
             e.HasOne(st => st.Sprint).WithMany(s => s.SprintTasks).HasForeignKey(st => st.SprintId);
+        });
+
+        modelBuilder.Entity<InterviewSession>(e =>
+        {
+            e.ToTable("interview_sessions");
+            e.Property(s => s.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.Type).HasColumnName("type");
+            e.Property(s => s.IdentityId).HasColumnName("identity_id");
+            e.Property(s => s.UserId).HasColumnName("user_id");
+            e.Property(s => s.CurrentStep).HasColumnName("current_step");
+            e.Property(s => s.ConversationHistory).HasColumnName("conversation_history").HasColumnType("jsonb");
+            e.Property(s => s.AccumulatedData).HasColumnName("accumulated_data").HasColumnType("jsonb");
+            e.Property(s => s.Active).HasColumnName("active");
+            e.Property(s => s.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+            e.Property(s => s.UpdatedAt).HasColumnName("updated_at");
+            e.Property(s => s.ExpiresAt).HasColumnName("expires_at");
+            e.Property(s => s.DeletedAt).HasColumnName("deleted_at");
+
+            e.HasOne(s => s.Identity).WithMany().HasForeignKey(s => s.IdentityId);
+            e.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId);
         });
     }
 }

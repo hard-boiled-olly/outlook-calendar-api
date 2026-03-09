@@ -19,7 +19,7 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
         if (HttpContext.Items["UserId"] is not Guid)
             return Unauthorized();
 
-        var result = await claude.RefineIdentityAsync(request.AreaOfLife, request.RoughStatement);
+        var result = await claude.RefineIdentityAsync(request.RoughStatement);
         return Ok(new IdentityRefinementResult(result.RefinedStatement, result.Explanation));
     }
 
@@ -32,9 +32,8 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
         var identity = new Identity
         {
             UserId = userId,
-            AreaOfLife = request.AreaOfLife,
             Statement = request.Statement,
-            Status = "active"
+            Active = true
         };
 
         db.Identities.Add(identity);
@@ -50,16 +49,15 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
             return Unauthorized();
 
         var identities = await db.Identities
-            .Where(i => i.UserId == userId && i.Status == "active")
+            .Where(i => i.UserId == userId && i.DeletedAt == null)
             .Include(i => i.Summits)
                 .ThenInclude(s => s.Milestones)
                     .ThenInclude(m => m.Sprints)
             .OrderByDescending(i => i.CreatedAt)
             .Select(i => new IdentityListItem(
                 i.Id,
-                i.AreaOfLife,
                 i.Statement,
-                i.Status,
+                i.Active,
                 i.CreatedAt,
                 i.Summits
                     .Where(s => s.Status == "active")
@@ -100,9 +98,8 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
 
         return Ok(new IdentityDetail(
             identity.Id,
-            identity.AreaOfLife,
             identity.Statement,
-            identity.Status,
+            identity.Active,
             identity.CreatedAt,
             identity.Summits.Select(s => new SummitDetail(
                 s.Id, s.Description, s.ProofCriteria,
@@ -131,9 +128,8 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
         if (identity == null)
             return NotFound();
 
-        // Abandon identity
-        identity.Status = "abandoned";
-        identity.AbandonedAt = DateTime.UtcNow;
+        // Soft-delete identity
+        identity.DeletedAt = DateTime.UtcNow;
 
         // Abandon all summits and end all active sprints
         foreach (var summit in identity.Summits)

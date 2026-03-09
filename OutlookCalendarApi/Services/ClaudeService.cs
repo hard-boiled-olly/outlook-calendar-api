@@ -25,7 +25,7 @@ public class ClaudeService
         throw new InvalidOperationException("Expected text response from Claude");
     }
 
-    public async Task<IdentityRefinementResponse> RefineIdentityAsync(string areaOfLife, string roughStatement)
+    public async Task<IdentityRefinementResponse> RefineIdentityAsync(string roughStatement)
     {
         var response = await _client.Messages.Create(new MessageCreateParams
         {
@@ -35,7 +35,7 @@ public class ClaudeService
             Messages = [new()
             {
                 Role = Role.User,
-                Content = $"Area of life: {areaOfLife}\n\nWhat I want: {roughStatement}",
+                Content = $"What I want: {roughStatement}",
             }],
             OutputConfig = new OutputConfig
             {
