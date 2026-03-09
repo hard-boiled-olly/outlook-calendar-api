@@ -15,7 +15,8 @@ public record IdentityListItem(
     string Statement,
     bool Active,
     DateTime CreatedAt,
-    SummitSummary? ActiveSummit
+    SummitSummary? ActiveSummit,
+    Guid? InterviewSessionId
 );
 
 public record SummitSummary(Guid Id, string Description, string Status,

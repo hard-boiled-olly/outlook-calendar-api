@@ -9,7 +9,7 @@ namespace OutlookCalendarApi.Controllers;
 [Authorize]
 public class AuthController(AppDbContext db) : ControllerBase
 {
-    [HttpPost("me")]
+    [HttpGet("me")]
     public async Task<IActionResult> Me()
     {
         if (HttpContext.Items["UserId"] is not Guid userId)

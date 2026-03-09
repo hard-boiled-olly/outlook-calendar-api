@@ -75,6 +75,10 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
                             ))
                             .FirstOrDefault()
                     ))
+                    .FirstOrDefault(),
+                db.InterviewSessions
+                    .Where(s => s.IdentityId == i.Id && s.DeletedAt == null)
+                    .Select(s => (Guid?)s.Id)
                     .FirstOrDefault()
             ))
             .ToListAsync();
@@ -114,10 +118,6 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
         if (HttpContext.Items["UserId"] is not Guid userId)
             return Unauthorized();
 
-        var graphToken = Request.Headers["X-Graph-Token"].FirstOrDefault();
-        if (string.IsNullOrEmpty(graphToken))
-            return BadRequest("X-Graph-Token header required for calendar cleanup");
-
         var identity = await db.Identities
             .Where(i => i.Id == id && i.UserId == userId)
             .Include(i => i.Summits)
@@ -127,6 +127,23 @@ public class IdentityController(AppDbContext db, ClaudeService claude, GraphCale
 
         if (identity == null)
             return NotFound();
+
+        // Draft identities have no calendar events — just soft-delete them directly
+        if (!identity.Active)
+        {
+            var session = await db.InterviewSessions
+                .FirstOrDefaultAsync(s => s.IdentityId == id && s.DeletedAt == null);
+            if (session != null)
+                session.DeletedAt = DateTime.UtcNow;
+
+            identity.DeletedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        var graphToken = Request.Headers["X-Graph-Token"].FirstOrDefault();
+        if (string.IsNullOrEmpty(graphToken))
+            return BadRequest("X-Graph-Token header required for calendar cleanup");
 
         // Soft-delete identity
         identity.DeletedAt = DateTime.UtcNow;
