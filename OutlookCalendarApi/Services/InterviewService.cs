@@ -153,6 +153,8 @@ public class InterviewService
         - For proof criteria, ask specific questions — don't assume. For a savings goal: where
           will the money be, how will they know they've hit it? For fitness: what specifically
           can they do that they can't do now?
+        - Don't ask about their timeline — if they mention a target date or deadline naturally,
+          great, but it's not something to probe for
 
         When you have enough information, present a natural summary covering:
         - Their identity statement ("I'm someone who...")

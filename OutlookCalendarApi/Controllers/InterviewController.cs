@@ -140,7 +140,7 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
 
     // POST /api/interviews/{id}/confirm — activate identity, create summit, close session
     [HttpPost("{id:guid}/confirm")]
-    public async Task<IActionResult> Confirm(Guid id)
+    public async Task<IActionResult> Confirm(Guid id, [FromBody] ConfirmInterviewRequest? request)
     {
         if (HttpContext.Items["UserId"] is not Guid userId)
             return Unauthorized();
@@ -169,8 +169,9 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
         identity.Active = true;
 
         DateOnly? targetDate = null;
-        if (!string.IsNullOrEmpty(output.TargetDate) &&
-            DateOnly.TryParse(output.TargetDate, out var parsedDate))
+        var dateSource = request?.TargetDate ?? output.TargetDate;
+        if (!string.IsNullOrEmpty(dateSource) &&
+            DateOnly.TryParse(dateSource, out var parsedDate))
         {
             targetDate = parsedDate;
         }

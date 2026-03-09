@@ -32,6 +32,9 @@ public record InterviewSummaryDto(
 
 public record SummaryBreakdownDto(string Component, string BasedOn);
 
+// POST /api/interviews/{id}/confirm
+public record ConfirmInterviewRequest(string? TargetDate); // ISO 8601 or null to clear
+
 // Response from POST /api/interviews/{id}/confirm
 public record InterviewConfirmResponse(Guid IdentityId, Guid SummitId);
 
