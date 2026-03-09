@@ -6,7 +6,14 @@ public record MilestoneSprintOutput(
     [property: JsonPropertyName("milestones")] MilestoneOutputItem[] Milestones,
     [property: JsonPropertyName("first_sprint_habits")] HabitOutputItem[] FirstSprintHabits,
     [property: JsonPropertyName("first_sprint_tasks")] TaskOutputItem[] FirstSprintTasks,
-    [property: JsonPropertyName("plan_breakdown")] SummaryBreakdownItem[] PlanBreakdown
+    [property: JsonPropertyName("plan_breakdown")] SummaryBreakdownItem[] PlanBreakdown,
+    [property: JsonPropertyName("scheduling_preferences")] SchedulingPreferencesOutput? SchedulingPreferences
+);
+
+public record SchedulingPreferencesOutput(
+    [property: JsonPropertyName("working_hours_start")] string? WorkingHoursStart,
+    [property: JsonPropertyName("working_hours_end")] string? WorkingHoursEnd,
+    [property: JsonPropertyName("preferred_times")] Dictionary<string, string>? PreferredTimes
 );
 
 public record MilestoneOutputItem(

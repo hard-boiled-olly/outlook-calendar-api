@@ -340,6 +340,36 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
             db.SprintTasks.Add(task);
         }
 
+        // Save scheduling preferences if extracted
+        if (output.SchedulingPreferences is not null)
+        {
+            var prefs = await db.SchedulingPreferences
+                .FirstOrDefaultAsync(sp => sp.UserId == session.UserId);
+
+            if (prefs == null)
+            {
+                prefs = new SchedulingPreferences
+                {
+                    UserId = session.UserId,
+                    TimeZone = "Europe/London"
+                };
+                db.SchedulingPreferences.Add(prefs);
+            }
+
+            if (output.SchedulingPreferences.WorkingHoursStart is not null
+                && TimeOnly.TryParse(output.SchedulingPreferences.WorkingHoursStart, out var start))
+                prefs.WorkingHoursStart = start;
+
+            if (output.SchedulingPreferences.WorkingHoursEnd is not null
+                && TimeOnly.TryParse(output.SchedulingPreferences.WorkingHoursEnd, out var end))
+                prefs.WorkingHoursEnd = end;
+
+            if (output.SchedulingPreferences.PreferredTimes is not null)
+                prefs.PreferredTimes = output.SchedulingPreferences.PreferredTimes;
+
+            prefs.UpdatedAt = DateTime.UtcNow;
+        }
+
         await db.SaveChangesAsync();
 
         return Ok(new MilestoneSprintConfirmResponse(

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<HabitEvent> HabitEvents => Set<HabitEvent>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
     public DbSet<InterviewSession> InterviewSessions => Set<InterviewSession>();
+    public DbSet<SchedulingPreferences> SchedulingPreferences => Set<SchedulingPreferences>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,6 +159,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasOne(s => s.Identity).WithMany().HasForeignKey(s => s.IdentityId);
             e.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId);
+        });
+
+        modelBuilder.Entity<SchedulingPreferences>(e =>
+        {
+            e.ToTable("scheduling_preferences");
+            e.Property(sp => sp.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            e.Property(sp => sp.UserId).HasColumnName("user_id");
+            e.Property(sp => sp.WorkingHoursStart).HasColumnName("working_hours_start");
+            e.Property(sp => sp.WorkingHoursEnd).HasColumnName("working_hours_end");
+            e.Property(sp => sp.PreferredTimes).HasColumnName("preferred_times").HasColumnType("jsonb");
+            e.Property(sp => sp.TimeZone).HasColumnName("time_zone");
+            e.Property(sp => sp.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+            e.Property(sp => sp.UpdatedAt).HasColumnName("updated_at");
+
+            e.HasOne(sp => sp.User).WithOne().HasForeignKey<SchedulingPreferences>(sp => sp.UserId);
         });
     }
 }

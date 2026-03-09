@@ -265,6 +265,11 @@ public class InterviewService
           - What resources/access they already have
           - What's worked or not worked before (if they've tried)
           - Realistic weekly time commitment
+        - Schedule preferences for calendar placement — weave these in naturally, don't make it
+          feel like a form:
+          - "What are your typical working hours?" (just get a sense of their day)
+          - "When would you prefer to do [activity]? Morning, afternoon, or evening?"
+          If they've already mentioned timing preferences, don't re-ask.
         - Based on their answers, propose milestones collaboratively:
           "Based on where you are, I'd suggest starting with..." then ask for feedback
         - Keep habits minimal: 1-2 per sprint. Each must be justified by the conversation.
@@ -274,6 +279,7 @@ public class InterviewService
         - Present the complete plan before finishing:
           - Milestones with target dates
           - First sprint: habits (with frequency and what exactly to do) and tasks (with deadlines)
+          - Scheduling preferences: working hours and preferred times for activities
         - Ask "Any of this feel off? Want to adjust anything?" before completing
         - If they want changes, adjust and re-present
 
@@ -391,6 +397,21 @@ public class InterviewService
                         "required": ["component", "based_on"],
                         "additionalProperties": false
                     }
+                },
+                "scheduling_preferences": {
+                    "type": "object",
+                    "description": "User's scheduling preferences extracted from the conversation. Null/omitted if not discussed.",
+                    "properties": {
+                        "working_hours_start": { "type": "string", "description": "HH:mm format, e.g. '09:00'" },
+                        "working_hours_end": { "type": "string", "description": "HH:mm format, e.g. '17:30'" },
+                        "preferred_times": {
+                            "type": "object",
+                            "description": "Map of activity description to preferred time slot: 'morning', 'afternoon', or 'evening'",
+                            "additionalProperties": { "type": "string" }
+                        }
+                    },
+                    "required": ["working_hours_start", "working_hours_end", "preferred_times"],
+                    "additionalProperties": false
                 }
             },
             "required": ["milestones", "first_sprint_habits", "first_sprint_tasks", "plan_breakdown"],
