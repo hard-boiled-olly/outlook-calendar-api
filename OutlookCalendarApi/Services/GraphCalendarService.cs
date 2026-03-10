@@ -124,6 +124,39 @@ public class GraphCalendarService
         return created?.Id ?? throw new InvalidOperationException("Graph did not return event ID");
     }
 
+    private static async Task<List<string>> CreateEventsInBatchesAsync(
+        GraphServiceClient client,
+        List<Event> events)
+    {
+        const int batchSize = 20;
+        var createdEventIds = new List<string>(events.Count);
+
+        for (var batchStart = 0; batchStart < events.Count; batchStart += batchSize)
+        {
+            var batch = new BatchRequestContentCollection(client);
+            var requestIds = new List<string>();
+
+            var batchEnd = Math.Min(batchStart + batchSize, events.Count);
+            for (var i = batchStart; i < batchEnd; i++)
+            {
+                var request = client.Me.Events.ToPostRequestInformation(events[i]);
+                var requestId = await batch.AddBatchRequestStepAsync(request);
+                requestIds.Add(requestId);
+            }
+
+            var response = await client.Batch.PostAsync(batch);
+
+            foreach (var requestId in requestIds)
+            {
+                var eventResponse = await response!.GetResponseByIdAsync<Event>(requestId);
+                createdEventIds.Add(eventResponse?.Id
+                    ?? throw new InvalidOperationException("Graph batch did not return event ID"));
+            }
+        }
+
+        return createdEventIds;
+    }
+
     public async Task<int> CreateHabitEventsAsync(
         string graphToken,
         string identityStatement,
@@ -133,21 +166,45 @@ public class GraphCalendarService
         string timeZone,
         Func<Guid, string, Task> onEventCreated)
     {
-        int count = 0;
+        var client = CreateClient(graphToken);
+        var events = new List<Event>(occurrences.Count);
+        var habitEventIds = new List<Guid>(occurrences.Count);
+
         foreach (var (habitEventId, date, startTime, durationMins) in occurrences)
         {
-            var subject = $"[ProveIt] {habitName}";
-            var body = $"{prescription}\n\nIdentity: {identityStatement}";
+            var startDateTime = date.ToDateTime(startTime);
+            var endDateTime = startDateTime.AddMinutes(durationMins);
 
-            var eventId = await CreateEventAsync(
-                graphToken, subject, body, date, startTime, durationMins, timeZone);
-
-            await onEventCreated(habitEventId, eventId);
-            count++;
-
-            await Task.Delay(250); // Respect Graph rate limit (4 req/sec/mailbox)
+            events.Add(new Event
+            {
+                Subject = $"[ProveIt] {habitName}",
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Text,
+                    Content = $"{prescription}\n\nIdentity: {identityStatement}"
+                },
+                Start = new DateTimeTimeZone
+                {
+                    DateTime = startDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone
+                },
+                End = new DateTimeTimeZone
+                {
+                    DateTime = endDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone
+                },
+                IsReminderOn = true,
+                ReminderMinutesBeforeStart = 15
+            });
+            habitEventIds.Add(habitEventId);
         }
-        return count;
+
+        var createdIds = await CreateEventsInBatchesAsync(client, events);
+
+        for (var i = 0; i < createdIds.Count; i++)
+            await onEventCreated(habitEventIds[i], createdIds[i]);
+
+        return createdIds.Count;
     }
 
     public async Task<int> CreateTaskEventsAsync(
@@ -157,21 +214,45 @@ public class GraphCalendarService
         string timeZone,
         Func<Guid, string, Task> onEventCreated)
     {
-        int count = 0;
+        var client = CreateClient(graphToken);
+        var events = new List<Event>(tasks.Count);
+        var taskIds = new List<Guid>(tasks.Count);
+
         foreach (var (taskId, name, description, deadline, startTime, durationMins) in tasks)
         {
-            var subject = $"[ProveIt] Task: {name}";
-            var body = $"{description ?? name}\n\nIdentity: {identityStatement}";
+            var startDateTime = deadline.ToDateTime(startTime);
+            var endDateTime = startDateTime.AddMinutes(durationMins);
 
-            var eventId = await CreateEventAsync(
-                graphToken, subject, body, deadline, startTime, durationMins, timeZone);
-
-            await onEventCreated(taskId, eventId);
-            count++;
-
-            await Task.Delay(250);
+            events.Add(new Event
+            {
+                Subject = $"[ProveIt] Task: {name}",
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Text,
+                    Content = $"{description ?? name}\n\nIdentity: {identityStatement}"
+                },
+                Start = new DateTimeTimeZone
+                {
+                    DateTime = startDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone
+                },
+                End = new DateTimeTimeZone
+                {
+                    DateTime = endDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone
+                },
+                IsReminderOn = true,
+                ReminderMinutesBeforeStart = 15
+            });
+            taskIds.Add(taskId);
         }
-        return count;
+
+        var createdIds = await CreateEventsInBatchesAsync(client, events);
+
+        for (var i = 0; i < createdIds.Count; i++)
+            await onEventCreated(taskIds[i], createdIds[i]);
+
+        return createdIds.Count;
     }
 
     public async Task<int> DeleteEventsAsync(string graphToken, List<string> calendarEventIds)
