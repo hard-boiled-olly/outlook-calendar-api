@@ -1,6 +1,7 @@
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Kiota.Abstractions.Authentication;
+using OutlookCalendarApi.Models.Dto;
 
 namespace OutlookCalendarApi.Services;
 
@@ -11,6 +12,76 @@ public class GraphCalendarService
         var authProvider = new BaseBearerTokenAuthenticationProvider(
             new TokenProvider(graphToken));
         return new GraphServiceClient(authProvider);
+    }
+
+    public async Task<List<BusySlot>> GetScheduleAsync(
+        string graphToken,
+        string userEmail,
+        DateOnly startDate,
+        DateOnly endDate,
+        string timeZone)
+    {
+        var client = CreateClient(graphToken);
+
+        var requestBody = new Microsoft.Graph.Me.Calendar.GetSchedule.GetSchedulePostRequestBody
+        {
+            Schedules = [userEmail],
+            StartTime = new DateTimeTimeZone
+            {
+                DateTime = startDate.ToDateTime(TimeOnly.MinValue).ToString("yyyy-MM-ddTHH:mm:ss"),
+                TimeZone = timeZone
+            },
+            EndTime = new DateTimeTimeZone
+            {
+                DateTime = endDate.ToDateTime(TimeOnly.MinValue).ToString("yyyy-MM-ddTHH:mm:ss"),
+                TimeZone = timeZone
+            }
+        };
+
+        var response = await client.Me.Calendar.GetSchedule.PostAsGetSchedulePostResponseAsync(requestBody);
+
+        var busySlots = new List<BusySlot>();
+
+        if (response?.Value is not { } scheduleItems)
+            return busySlots;
+
+        foreach (var schedule in scheduleItems)
+        {
+            if (schedule.ScheduleItems is null) continue;
+
+            foreach (var item in schedule.ScheduleItems)
+            {
+                if (item.Start?.DateTime is null || item.End?.DateTime is null) continue;
+
+                var status = item.Status switch
+                {
+                    FreeBusyStatus.Busy => "busy",
+                    FreeBusyStatus.Tentative => "tentative",
+                    FreeBusyStatus.Oof => "oof",
+                    FreeBusyStatus.WorkingElsewhere => "workingElsewhere",
+                    _ => null
+                };
+
+                // Only include slots where the user is actually busy
+                if (status is null) continue;
+
+                var start = DateTimeOffset.Parse(item.Start.DateTime);
+                var end = DateTimeOffset.Parse(item.End.DateTime);
+
+                // If the Graph response includes timezone info, use it;
+                // otherwise assume the timezone we requested
+                if (start.Offset == TimeSpan.Zero && item.Start.TimeZone is null)
+                {
+                    var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+                    start = new DateTimeOffset(start.DateTime, tz.GetUtcOffset(start.DateTime));
+                    end = new DateTimeOffset(end.DateTime, tz.GetUtcOffset(end.DateTime));
+                }
+
+                busySlots.Add(new BusySlot(start, end, status));
+            }
+        }
+
+        return busySlots;
     }
 
     public async Task<string> CreateEventAsync(

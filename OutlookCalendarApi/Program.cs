@@ -15,6 +15,7 @@ builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration,
 builder.Services.AddSingleton<ClaudeService>();
 builder.Services.AddSingleton<InterviewService>();
 builder.Services.AddSingleton<GraphCalendarService>();
+builder.Services.AddSingleton<SchedulingService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
