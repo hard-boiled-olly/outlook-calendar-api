@@ -157,6 +157,40 @@ public class GraphCalendarService
         return createdEventIds;
     }
 
+    private static async Task<int> DeleteEventsInBatchesAsync(
+        GraphServiceClient client,
+        List<string> calendarEventIds)
+    {
+        const int batchSize = 20;
+        var deleted = 0;
+
+        for (var batchStart = 0; batchStart < calendarEventIds.Count; batchStart += batchSize)
+        {
+            var batch = new BatchRequestContentCollection(client);
+            var requestIds = new List<string>();
+
+            var batchEnd = Math.Min(batchStart + batchSize, calendarEventIds.Count);
+            for (var i = batchStart; i < batchEnd; i++)
+            {
+                var request = client.Me.Events[calendarEventIds[i]].ToDeleteRequestInformation();
+                var requestId = await batch.AddBatchRequestStepAsync(request);
+                requestIds.Add(requestId);
+            }
+
+            var response = await client.Batch.PostAsync(batch);
+            var statusCodes = await response!.GetResponsesStatusCodesAsync();
+
+            foreach (var requestId in requestIds)
+            {
+                if (statusCodes.TryGetValue(requestId, out var status)
+                    && status is System.Net.HttpStatusCode.NoContent or System.Net.HttpStatusCode.NotFound)
+                    deleted++;
+            }
+        }
+
+        return deleted;
+    }
+
     public async Task<int> CreateHabitEventsAsync(
         string graphToken,
         string identityStatement,
@@ -258,23 +292,7 @@ public class GraphCalendarService
     public async Task<int> DeleteEventsAsync(string graphToken, List<string> calendarEventIds)
     {
         var client = CreateClient(graphToken);
-        int deleted = 0;
-
-        foreach (var eventId in calendarEventIds)
-        {
-            try
-            {
-                await client.Me.Events[eventId].DeleteAsync();
-                deleted++;
-                await Task.Delay(250); // Respect Graph rate limit
-            }
-            catch
-            {
-                // Event may already be deleted — continue with remaining
-            }
-        }
-
-        return deleted;
+        return await DeleteEventsInBatchesAsync(client, calendarEventIds);
     }
 
     private class TokenProvider(string token) : IAccessTokenProvider
