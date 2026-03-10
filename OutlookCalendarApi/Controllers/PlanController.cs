@@ -73,8 +73,6 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
             return NotFound();
 
         var graphToken = Request.Headers["X-Graph-Token"].FirstOrDefault();
-        if (string.IsNullOrEmpty(graphToken))
-            return BadRequest("X-Graph-Token header required for calendar event creation");
 
         var identity = milestone.Summit.Identity;
 
@@ -154,63 +152,68 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
 
         await db.SaveChangesAsync();
 
-        // Create calendar events via Graph
+        // Create calendar events via Graph (only if token provided — otherwise
+        // the scheduling flow handles event creation separately)
         var totalEvents = 0;
-        var timeZone = "UTC";
 
-        // Habit events
-        var prescriptions = await db.HabitPrescriptions
-            .Where(hp => hp.SprintId == sprint.Id)
-            .Include(hp => hp.Habit)
-            .Include(hp => hp.HabitEvents.Where(he => he.SprintId == sprint.Id))
-            .ToListAsync();
-
-        foreach (var prescription in prescriptions)
+        if (!string.IsNullOrEmpty(graphToken))
         {
-            var occurrences = prescription.HabitEvents
-                .Select(he => (he.Id, he.ScheduledDate,
-                    he.ScheduledTime ?? new TimeOnly(9, 0), he.DurationMins))
+            var timeZone = "UTC";
+
+            // Habit events
+            var prescriptions = await db.HabitPrescriptions
+                .Where(hp => hp.SprintId == sprint.Id)
+                .Include(hp => hp.Habit)
+                .Include(hp => hp.HabitEvents.Where(he => he.SprintId == sprint.Id))
+                .ToListAsync();
+
+            foreach (var prescription in prescriptions)
+            {
+                var occurrences = prescription.HabitEvents
+                    .Select(he => (he.Id, he.ScheduledDate,
+                        he.ScheduledTime ?? new TimeOnly(9, 0), he.DurationMins))
+                    .ToList();
+
+                totalEvents += await graph.CreateHabitEventsAsync(
+                    graphToken, identity.Statement,
+                    prescription.Habit.Name, prescription.Prescription,
+                    occurrences, timeZone,
+                    async (habitEventId, calendarEventId) =>
+                    {
+                        var he = await db.HabitEvents.FindAsync(habitEventId);
+                        if (he != null)
+                        {
+                            he.CalendarEventId = calendarEventId;
+                            he.Status = "synced";
+                        }
+                    });
+            }
+
+            // Sprint task events
+            var sprintTasks = await db.SprintTasks
+                .Where(st => st.SprintId == sprint.Id && st.DurationMins != null)
+                .ToListAsync();
+
+            var taskOccurrences = sprintTasks
+                .Select(st => (st.Id, st.Name, st.Description, st.Deadline,
+                    new TimeOnly(10, 0), st.DurationMins ?? 30))
                 .ToList();
 
-            totalEvents += await graph.CreateHabitEventsAsync(
+            totalEvents += await graph.CreateTaskEventsAsync(
                 graphToken, identity.Statement,
-                prescription.Habit.Name, prescription.Prescription,
-                occurrences, timeZone,
-                async (habitEventId, calendarEventId) =>
+                taskOccurrences, timeZone,
+                async (taskId, calendarEventId) =>
                 {
-                    var he = await db.HabitEvents.FindAsync(habitEventId);
-                    if (he != null)
+                    var st = await db.SprintTasks.FindAsync(taskId);
+                    if (st != null)
                     {
-                        he.CalendarEventId = calendarEventId;
-                        he.Status = "synced";
+                        st.CalendarEventId = calendarEventId;
+                        st.Status = "synced";
                     }
                 });
+
+            await db.SaveChangesAsync();
         }
-
-        // Sprint task events
-        var sprintTasks = await db.SprintTasks
-            .Where(st => st.SprintId == sprint.Id && st.DurationMins != null)
-            .ToListAsync();
-
-        var taskOccurrences = sprintTasks
-            .Select(st => (st.Id, st.Name, st.Description, st.Deadline,
-                new TimeOnly(10, 0), st.DurationMins ?? 30))
-            .ToList();
-
-        totalEvents += await graph.CreateTaskEventsAsync(
-            graphToken, identity.Statement,
-            taskOccurrences, timeZone,
-            async (taskId, calendarEventId) =>
-            {
-                var st = await db.SprintTasks.FindAsync(taskId);
-                if (st != null)
-                {
-                    st.CalendarEventId = calendarEventId;
-                    st.Status = "synced";
-                }
-            });
-
-        await db.SaveChangesAsync();
 
         return Ok(new SprintConfirmResult(sprint.Id, totalEvents));
     }
