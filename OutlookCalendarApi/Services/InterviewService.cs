@@ -405,9 +405,17 @@ public class InterviewService
                         "working_hours_start": { "type": "string", "description": "HH:mm format, e.g. '09:00'" },
                         "working_hours_end": { "type": "string", "description": "HH:mm format, e.g. '17:30'" },
                         "preferred_times": {
-                            "type": "object",
-                            "description": "Map of activity description to preferred time slot: 'morning', 'afternoon', or 'evening'",
-                            "additionalProperties": { "type": "string" }
+                            "type": "array",
+                            "description": "Activity to preferred time slot mappings",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "activity": { "type": "string", "description": "Activity description" },
+                                    "time_slot": { "type": "string", "description": "'morning', 'afternoon', or 'evening'" }
+                                },
+                                "required": ["activity", "time_slot"],
+                                "additionalProperties": false
+                            }
                         }
                     },
                     "required": ["working_hours_start", "working_hours_end", "preferred_times"],

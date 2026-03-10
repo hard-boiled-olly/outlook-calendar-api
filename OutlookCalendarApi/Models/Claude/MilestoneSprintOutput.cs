@@ -13,7 +13,12 @@ public record MilestoneSprintOutput(
 public record SchedulingPreferencesOutput(
     [property: JsonPropertyName("working_hours_start")] string? WorkingHoursStart,
     [property: JsonPropertyName("working_hours_end")] string? WorkingHoursEnd,
-    [property: JsonPropertyName("preferred_times")] Dictionary<string, string>? PreferredTimes
+    [property: JsonPropertyName("preferred_times")] PreferredTimeEntry[]? PreferredTimes
+);
+
+public record PreferredTimeEntry(
+    [property: JsonPropertyName("activity")] string Activity,
+    [property: JsonPropertyName("time_slot")] string TimeSlot
 );
 
 public record MilestoneOutputItem(

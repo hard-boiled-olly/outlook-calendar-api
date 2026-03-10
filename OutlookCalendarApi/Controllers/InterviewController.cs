@@ -41,7 +41,7 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
         var session = new InterviewSession
         {
             Type = request.Type,
-            IdentityId = identity.Id,
+            Identity = identity,
             UserId = userId,
             CurrentStep = 1,
             ConversationHistory = historyJson,
@@ -299,7 +299,7 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
         var firstMilestone = milestones[0];
         var sprint = new Sprint
         {
-            MilestoneId = firstMilestone.Id,
+            Milestone = firstMilestone,
             SprintNumber = 1,
             StartedAt = DateTime.UtcNow,
             Status = "active"
@@ -324,8 +324,8 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
 
             var prescription = new HabitPrescription
             {
-                HabitId = habit.Id,
-                SprintId = sprint.Id,
+                Habit = habit,
+                Sprint = sprint,
                 Prescription = habitItem.Prescription
             };
             db.HabitPrescriptions.Add(prescription);
@@ -338,8 +338,8 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
             {
                 db.HabitEvents.Add(new HabitEvent
                 {
-                    HabitPrescriptionId = prescription.Id,
-                    SprintId = sprint.Id,
+                    HabitPrescription = prescription,
+                    Sprint = sprint,
                     ScheduledDate = date,
                     DurationMins = habitItem.DurationMins,
                     Status = "pending"
@@ -351,7 +351,7 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
         {
             var task = new SprintTask
             {
-                SprintId = sprint.Id,
+                Sprint = sprint,
                 Name = taskItem.Name,
                 Description = taskItem.Description,
                 Deadline = DateOnly.Parse(taskItem.Deadline),
@@ -386,7 +386,8 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
                 prefs.WorkingHoursEnd = end;
 
             if (output.SchedulingPreferences.PreferredTimes is not null)
-                prefs.PreferredTimes = output.SchedulingPreferences.PreferredTimes;
+                prefs.PreferredTimes = output.SchedulingPreferences.PreferredTimes
+                    .ToDictionary(e => e.Activity, e => e.TimeSlot);
 
             prefs.UpdatedAt = DateTime.UtcNow;
         }

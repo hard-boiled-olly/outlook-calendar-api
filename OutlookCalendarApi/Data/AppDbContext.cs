@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OutlookCalendarApi.Models.Domain;
 
@@ -168,7 +169,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(sp => sp.UserId).HasColumnName("user_id");
             e.Property(sp => sp.WorkingHoursStart).HasColumnName("working_hours_start");
             e.Property(sp => sp.WorkingHoursEnd).HasColumnName("working_hours_end");
-            e.Property(sp => sp.PreferredTimes).HasColumnName("preferred_times").HasColumnType("jsonb");
+            e.Property(sp => sp.PreferredTimes).HasColumnName("preferred_times").HasColumnType("jsonb")
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null)!);
             e.Property(sp => sp.TimeZone).HasColumnName("time_zone");
             e.Property(sp => sp.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
             e.Property(sp => sp.UpdatedAt).HasColumnName("updated_at");
