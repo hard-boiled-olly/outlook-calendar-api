@@ -154,7 +154,9 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
 
         // Create calendar events via Graph (only if token provided — otherwise
         // the scheduling flow handles event creation separately)
-        var totalEvents = 0;
+        var totalSucceeded = 0;
+        var totalFailed = 0;
+        var allErrors = new List<string>();
 
         if (!string.IsNullOrEmpty(graphToken))
         {
@@ -174,7 +176,7 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
                         he.ScheduledTime ?? new TimeOnly(9, 0), he.DurationMins))
                     .ToList();
 
-                totalEvents += await graph.CreateHabitEventsAsync(
+                var habitResult = await graph.CreateHabitEventsAsync(
                     graphToken, identity.Statement,
                     prescription.Habit.Name, prescription.Prescription,
                     occurrences, timeZone,
@@ -187,6 +189,10 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
                             he.Status = "synced";
                         }
                     });
+
+                totalSucceeded += habitResult.Succeeded;
+                totalFailed += habitResult.Failed;
+                allErrors.AddRange(habitResult.Errors);
             }
 
             // Sprint task events
@@ -199,7 +205,7 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
                     new TimeOnly(10, 0), st.DurationMins ?? 30))
                 .ToList();
 
-            totalEvents += await graph.CreateTaskEventsAsync(
+            var taskResult = await graph.CreateTaskEventsAsync(
                 graphToken, identity.Statement,
                 taskOccurrences, timeZone,
                 async (taskId, calendarEventId) =>
@@ -212,10 +218,14 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
                     }
                 });
 
+            totalSucceeded += taskResult.Succeeded;
+            totalFailed += taskResult.Failed;
+            allErrors.AddRange(taskResult.Errors);
+
             await db.SaveChangesAsync();
         }
 
-        return Ok(new SprintConfirmResult(sprint.Id, totalEvents));
+        return Ok(new SprintConfirmResult(sprint.Id, totalSucceeded, totalFailed, allErrors));
     }
 
     [HttpPost("api/sprints/{sprintId:guid}/replan")]

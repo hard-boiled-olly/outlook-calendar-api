@@ -70,5 +70,7 @@ public record SprintTaskDetail(
 
 public record SprintConfirmResult(
     Guid SprintId,
-    int CalendarEventsCreated
+    int CalendarEventsCreated,
+    int CalendarEventsFailed,
+    List<string> Errors
 );

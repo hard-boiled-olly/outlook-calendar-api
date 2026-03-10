@@ -122,7 +122,9 @@ public class ScheduleController(
             .FirstOrDefaultAsync(sp => sp.UserId == userId);
         var timeZone = preferences?.TimeZone ?? "Europe/London";
 
-        var totalEvents = 0;
+        var totalSucceeded = 0;
+        var totalFailed = 0;
+        var allErrors = new List<string>();
 
         // Group accepted slots by type
         var habitSlots = request.Slots.Where(s => s.EventType == "habit").ToList();
@@ -156,7 +158,7 @@ public class ScheduleController(
                 })
                 .ToList();
 
-            totalEvents += await graph.CreateHabitEventsAsync(
+            var habitResult = await graph.CreateHabitEventsAsync(
                 graphToken, identity.Statement,
                 first.HabitPrescription.Habit.Name,
                 first.HabitPrescription.Prescription,
@@ -171,6 +173,10 @@ public class ScheduleController(
                         he.Status = "synced";
                     }
                 });
+
+            totalSucceeded += habitResult.Succeeded;
+            totalFailed += habitResult.Failed;
+            allErrors.AddRange(habitResult.Errors);
         }
 
         // Create calendar events for tasks
@@ -189,7 +195,7 @@ public class ScheduleController(
             })
             .ToList();
 
-        totalEvents += await graph.CreateTaskEventsAsync(
+        var taskResult = await graph.CreateTaskEventsAsync(
             graphToken, identity.Statement,
             taskOccurrences, timeZone,
             async (taskId, calendarEventId) =>
@@ -202,8 +208,12 @@ public class ScheduleController(
                 }
             });
 
+        totalSucceeded += taskResult.Succeeded;
+        totalFailed += taskResult.Failed;
+        allErrors.AddRange(taskResult.Errors);
+
         await db.SaveChangesAsync();
 
-        return Ok(new ConfirmScheduleResponse(totalEvents));
+        return Ok(new ConfirmScheduleResponse(totalSucceeded, totalFailed, allErrors));
     }
 }

@@ -5,7 +5,7 @@ using OutlookCalendarApi.Models.Dto;
 
 namespace OutlookCalendarApi.Services;
 
-public class GraphCalendarService
+public class GraphCalendarService(ILogger<GraphCalendarService> logger)
 {
     private static GraphServiceClient CreateClient(string graphToken)
     {
@@ -124,12 +124,14 @@ public class GraphCalendarService
         return created?.Id ?? throw new InvalidOperationException("Graph did not return event ID");
     }
 
-    private static async Task<List<string>> CreateEventsInBatchesAsync(
+    private async Task<(List<string?> createdIds, BatchResult result)> CreateEventsInBatchesAsync(
         GraphServiceClient client,
         List<Event> events)
     {
         const int batchSize = 20;
-        var createdEventIds = new List<string>(events.Count);
+        var createdEventIds = new List<string?>(events.Count);
+        var errors = new List<string>();
+        var failed = 0;
 
         for (var batchStart = 0; batchStart < events.Count; batchStart += batchSize)
         {
@@ -148,21 +150,41 @@ public class GraphCalendarService
 
             foreach (var requestId in requestIds)
             {
-                var eventResponse = await response!.GetResponseByIdAsync<Event>(requestId);
-                createdEventIds.Add(eventResponse?.Id
-                    ?? throw new InvalidOperationException("Graph batch did not return event ID"));
+                try
+                {
+                    var eventResponse = await response!.GetResponseByIdAsync<Event>(requestId);
+                    if (eventResponse?.Id is { } id)
+                    {
+                        createdEventIds.Add(id);
+                    }
+                    else
+                    {
+                        failed++;
+                        errors.Add("Graph returned event with no ID");
+                        createdEventIds.Add(null);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    errors.Add(ex.Message);
+                    createdEventIds.Add(null);
+                    logger.LogWarning(ex, "Failed to create calendar event in batch");
+                }
             }
         }
 
-        return createdEventIds;
+        return (createdEventIds, new BatchResult(createdEventIds.Count - failed, failed, errors));
     }
 
-    private static async Task<int> DeleteEventsInBatchesAsync(
+    private async Task<BatchResult> DeleteEventsInBatchesAsync(
         GraphServiceClient client,
         List<string> calendarEventIds)
     {
         const int batchSize = 20;
         var deleted = 0;
+        var failed = 0;
+        var errors = new List<string>();
 
         for (var batchStart = 0; batchStart < calendarEventIds.Count; batchStart += batchSize)
         {
@@ -182,16 +204,29 @@ public class GraphCalendarService
 
             foreach (var requestId in requestIds)
             {
-                if (statusCodes.TryGetValue(requestId, out var status)
-                    && status is System.Net.HttpStatusCode.NoContent or System.Net.HttpStatusCode.NotFound)
-                    deleted++;
+                if (statusCodes.TryGetValue(requestId, out var status))
+                {
+                    if (status is System.Net.HttpStatusCode.NoContent or System.Net.HttpStatusCode.NotFound)
+                        deleted++;
+                    else
+                    {
+                        failed++;
+                        errors.Add($"Delete returned {status}");
+                        logger.LogWarning("Failed to delete calendar event, status: {Status}", status);
+                    }
+                }
+                else
+                {
+                    failed++;
+                    errors.Add("No status returned for delete request");
+                }
             }
         }
 
-        return deleted;
+        return new BatchResult(deleted, failed, errors);
     }
 
-    public async Task<int> CreateHabitEventsAsync(
+    public async Task<BatchResult> CreateHabitEventsAsync(
         string graphToken,
         string identityStatement,
         string habitName,
@@ -233,15 +268,18 @@ public class GraphCalendarService
             habitEventIds.Add(habitEventId);
         }
 
-        var createdIds = await CreateEventsInBatchesAsync(client, events);
+        var (createdIds, result) = await CreateEventsInBatchesAsync(client, events);
 
         for (var i = 0; i < createdIds.Count; i++)
-            await onEventCreated(habitEventIds[i], createdIds[i]);
+        {
+            if (createdIds[i] is { } calendarEventId)
+                await onEventCreated(habitEventIds[i], calendarEventId);
+        }
 
-        return createdIds.Count;
+        return result;
     }
 
-    public async Task<int> CreateTaskEventsAsync(
+    public async Task<BatchResult> CreateTaskEventsAsync(
         string graphToken,
         string identityStatement,
         List<(Guid taskId, string name, string? description, DateOnly deadline, TimeOnly startTime, int durationMins)> tasks,
@@ -281,15 +319,18 @@ public class GraphCalendarService
             taskIds.Add(taskId);
         }
 
-        var createdIds = await CreateEventsInBatchesAsync(client, events);
+        var (createdIds, result) = await CreateEventsInBatchesAsync(client, events);
 
         for (var i = 0; i < createdIds.Count; i++)
-            await onEventCreated(taskIds[i], createdIds[i]);
+        {
+            if (createdIds[i] is { } calendarEventId)
+                await onEventCreated(taskIds[i], calendarEventId);
+        }
 
-        return createdIds.Count;
+        return result;
     }
 
-    public async Task<int> DeleteEventsAsync(string graphToken, List<string> calendarEventIds)
+    public async Task<BatchResult> DeleteEventsAsync(string graphToken, List<string> calendarEventIds)
     {
         var client = CreateClient(graphToken);
         return await DeleteEventsInBatchesAsync(client, calendarEventIds);

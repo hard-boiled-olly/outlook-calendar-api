@@ -67,5 +67,10 @@ public record AcceptedSlot(
 
 // POST /api/sprints/{id}/schedule/confirm — response
 public record ConfirmScheduleResponse(
-    int CalendarEventsCreated
+    int CalendarEventsCreated,
+    int Failed,
+    List<string> Errors
 );
+
+// Result of a batch Graph API operation (create or delete events)
+public record BatchResult(int Succeeded, int Failed, List<string> Errors);
