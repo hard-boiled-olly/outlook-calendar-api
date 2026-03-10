@@ -45,3 +45,27 @@ public record ProposedSlot(
     bool IsPreferredTime,  // true if placed in the user's preferred window
     string? Note           // e.g. "Preferred morning slot was busy, scheduled at 14:00"
 );
+
+// POST /api/sprints/{id}/schedule/propose — response
+public record ProposeScheduleResponse(
+    List<ProposedSlot> Slots
+);
+
+// POST /api/sprints/{id}/schedule/confirm — request
+public record ConfirmScheduleRequest(
+    List<AcceptedSlot> Slots
+);
+
+// A slot the user has accepted (may differ from proposal if they adjusted times)
+public record AcceptedSlot(
+    Guid EventId,
+    string EventType,      // "habit" or "task"
+    DateOnly Date,
+    TimeOnly StartTime,
+    int DurationMins
+);
+
+// POST /api/sprints/{id}/schedule/confirm — response
+public record ConfirmScheduleResponse(
+    int CalendarEventsCreated
+);

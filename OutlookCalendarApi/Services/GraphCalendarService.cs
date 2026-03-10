@@ -129,14 +129,13 @@ public class GraphCalendarService
         string identityStatement,
         string habitName,
         string prescription,
-        List<(Guid habitEventId, DateOnly date, int durationMins)> occurrences,
+        List<(Guid habitEventId, DateOnly date, TimeOnly startTime, int durationMins)> occurrences,
         string timeZone,
         Func<Guid, string, Task> onEventCreated)
     {
         int count = 0;
-        foreach (var (habitEventId, date, durationMins) in occurrences)
+        foreach (var (habitEventId, date, startTime, durationMins) in occurrences)
         {
-            var startTime = new TimeOnly(9, 0);
             var subject = $"[ProveIt] {habitName}";
             var body = $"{prescription}\n\nIdentity: {identityStatement}";
 
@@ -154,14 +153,13 @@ public class GraphCalendarService
     public async Task<int> CreateTaskEventsAsync(
         string graphToken,
         string identityStatement,
-        List<(Guid taskId, string name, string? description, DateOnly deadline, int durationMins)> tasks,
+        List<(Guid taskId, string name, string? description, DateOnly deadline, TimeOnly startTime, int durationMins)> tasks,
         string timeZone,
         Func<Guid, string, Task> onEventCreated)
     {
         int count = 0;
-        foreach (var (taskId, name, description, deadline, durationMins) in tasks)
+        foreach (var (taskId, name, description, deadline, startTime, durationMins) in tasks)
         {
-            var startTime = new TimeOnly(10, 0);
             var subject = $"[ProveIt] Task: {name}";
             var body = $"{description ?? name}\n\nIdentity: {identityStatement}";
 

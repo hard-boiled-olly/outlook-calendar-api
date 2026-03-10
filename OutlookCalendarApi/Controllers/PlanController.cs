@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -123,8 +122,8 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
             db.HabitPrescriptions.Add(prescription);
             await db.SaveChangesAsync();
 
-            var eventsPerWeek = ParseFrequency(item.Frequency);
-            var dates = DistributeEventsAcrossWeeks(sprintStart, sprintEnd, eventsPerWeek);
+            var eventsPerWeek = DateDistribution.ParseFrequency(item.Frequency);
+            var dates = DateDistribution.DistributeEventsAcrossWeeks(sprintStart, sprintEnd, eventsPerWeek);
 
             foreach (var date in dates)
             {
@@ -169,7 +168,8 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
         foreach (var prescription in prescriptions)
         {
             var occurrences = prescription.HabitEvents
-                .Select(he => (he.Id, he.ScheduledDate, he.DurationMins))
+                .Select(he => (he.Id, he.ScheduledDate,
+                    he.ScheduledTime ?? new TimeOnly(9, 0), he.DurationMins))
                 .ToList();
 
             totalEvents += await graph.CreateHabitEventsAsync(
@@ -193,7 +193,8 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
             .ToListAsync();
 
         var taskOccurrences = sprintTasks
-            .Select(st => (st.Id, st.Name, st.Description, st.Deadline, st.DurationMins ?? 30))
+            .Select(st => (st.Id, st.Name, st.Description, st.Deadline,
+                new TimeOnly(10, 0), st.DurationMins ?? 30))
             .ToList();
 
         totalEvents += await graph.CreateTaskEventsAsync(
@@ -348,39 +349,4 @@ public class PlanController(AppDbContext db, ClaudeService claude, GraphCalendar
         return Ok(tasks);
     }
 
-    private static int ParseFrequency(string frequency)
-    {
-        var lower = frequency.ToLowerInvariant();
-        if (lower.Contains("daily") || lower.Contains("every day")) return 7;
-        var match = Regex.Match(lower, @"(\d+)\s*x?\s*(per|times|\/)\s*week");
-        if (match.Success) return int.Parse(match.Groups[1].Value);
-        return 3;
-    }
-
-    private static List<DateOnly> DistributeEventsAcrossWeeks(
-        DateOnly start, DateOnly end, int perWeek)
-    {
-        var dates = new List<DateOnly>();
-        var current = start;
-
-        while (current <= end)
-        {
-            var weekEnd = current.AddDays(6);
-            if (weekEnd > end) weekEnd = end;
-
-            var daysInWeek = weekEnd.DayNumber - current.DayNumber + 1;
-            var spacing = Math.Max(1, daysInWeek / perWeek);
-
-            for (int i = 0; i < perWeek; i++)
-            {
-                var date = current.AddDays(i * spacing);
-                if (date > weekEnd) break;
-                dates.Add(date);
-            }
-
-            current = current.AddDays(7);
-        }
-
-        return dates;
-    }
 }

@@ -306,7 +306,12 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
         };
         db.Sprints.Add(sprint);
 
-        // Create habits, prescriptions, and tasks
+        // Create habits, prescriptions, and habit events
+        var sprintStart = DateOnly.FromDateTime(DateTime.UtcNow);
+        var sprintEnd = firstMilestone.TargetDate;
+        var maxEnd = sprintStart.AddDays(28);
+        if (sprintEnd > maxEnd) sprintEnd = maxEnd;
+
         foreach (var habitItem in output.FirstSprintHabits)
         {
             var habit = new Habit
@@ -324,6 +329,22 @@ public class InterviewController(AppDbContext db, InterviewService interviews) :
                 Prescription = habitItem.Prescription
             };
             db.HabitPrescriptions.Add(prescription);
+
+            // Distribute habit events across the sprint date range
+            var eventsPerWeek = DateDistribution.ParseFrequency(habitItem.Frequency);
+            var dates = DateDistribution.DistributeEventsAcrossWeeks(sprintStart, sprintEnd, eventsPerWeek);
+
+            foreach (var date in dates)
+            {
+                db.HabitEvents.Add(new HabitEvent
+                {
+                    HabitPrescriptionId = prescription.Id,
+                    SprintId = sprint.Id,
+                    ScheduledDate = date,
+                    DurationMins = habitItem.DurationMins,
+                    Status = "pending"
+                });
+            }
         }
 
         foreach (var taskItem in output.FirstSprintTasks)
